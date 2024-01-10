@@ -1,127 +1,144 @@
 #!/bin/bash
 
-echo "###########################################################"
-echo "#                Pong Fastboot ROM Flasher                #"
-echo "#                   Developed/Tested By                   #"
-echo "#  HELLBOY017, viralbanda, spike0en, PHATwalrus, arter97  #"
-echo "#          [Nothing Phone (2) Telegram Dev Team]          #"
-echo "###########################################################"
+# Define colors for a more visible theme
+export NEWT_COLORS='
+root=,black
+border=white,black
+window=,black
+shadow=,black
+title=white,black
+button=white,black
+actbutton=white,black
+'
 
+# Default image directory
+default_image_dir="images"
+
+# Fastboot command
 fastboot=bin/fastboot
 
+# Function to show a message
+show_message() {
+    whiptail --title "$1" --msgbox "$2" 10 60
+}
+
+# Function for input dialog
+get_input() {
+    whiptail --title "$1" --inputbox "$2" 10 60 "$3" 3>&1 1>&2 2>&3
+}
+
+# Function for confirmation dialog
+confirm_action() {
+    whiptail --title "$1" --yesno "$2" 10 60
+    return $?
+}
+
+# Function to check if a command succeeded
+check_success() {
+    if [ $1 -ne 0 ]; then
+        show_message "Error" "$2"
+        exit 1
+    fi
+}
+
+# Function to check if the image file exists
+check_file() {
+    if [ ! -f "$1/$2.img" ]; then
+        show_message "Error" "Image file for $2 not found in directory $1!"
+        exit 1
+    fi
+}
+
+# Function to flash images
+flash_images() {
+    DIR=$1
+    SLOT=$2
+    IMAGES=$3
+    for i in $IMAGES; do
+        check_file $DIR $i
+        $fastboot flash $SLOT $i $i.img
+        check_success $? "Flashing $i failed!"
+    done
+}
+
+# Ask user for the directory containing the image files
+image_dir=$(get_input "Image Directory" "Enter the directory containing the image files:" $default_image_dir)
+if [ -z "$image_dir" ]; then
+    image_dir=$default_image_dir
+fi
+
+# Check for fastboot executable
 if [ ! -f $fastboot ] || [ ! -x $fastboot ]; then
-    echo "Fastboot cannot be executed, exiting"
+    show_message "Error" "Fastboot cannot be executed, exiting"
     exit 1
 fi
 
-echo "#############################"
-echo "# CHANGING ACTIVE SLOT TO A #"
-echo "#############################"
-$fastboot --set-active=a
+# Initial message
+show_message "Welcome" "Pong Fastboot ROM Flasher ALPHA"
 
-echo "###################"
-echo "# FORMATTING DATA #"
-echo "###################"
-read -p "Wipe Data? (Y/N) " DATA_RESP
-case $DATA_RESP in
-    [yY] )
-        echo 'Please ignore "Did you mean to format this partition?" warnings.'
-        $fastboot erase userdata
-        $fastboot erase metadata
-        ;;
-esac
+# Change active slot
+if confirm_action "Change Slot" "Change active slot to A?"; then
+    $fastboot --set-active=a
+    check_success $? "Setting active slot to A failed!"
+fi
 
-read -p "Flash images on both slots? If unsure, say N. (Y/N) " SLOT_RESP
-case $SLOT_RESP in
-    [yY] )
-        SLOT="--slot=all"
-        ;;
-esac
+# Format data
+if confirm_action "Format Data" "Wipe Data?"; then
+    $fastboot erase userdata
+    check_success $? "Erasing userdata failed!"
+    $fastboot erase metadata
+    check_success $? "Erasing metadata failed!"
+fi
 
-echo "##########################"
-echo "# FLASHING BOOT/RECOVERY #"
-echo "##########################"
-for i in boot vendor_boot dtbo recovery; do
-    if [ $SLOT = "--slot=all" ]; then
-        for s in a b; do
-            $fastboot flash ${i}_${s} $i.img
-        done
-    else
-        $fastboot flash $i $i.img
-    fi
-done
+# Flash images on both slots
+if confirm_action "Flash Slots" "Flash images on both slots?"; then
+    SLOT="--slot=all"
+else
+    SLOT=""
+fi
 
-echo "##########################"             
-echo "# REBOOTING TO FASTBOOTD #"       
-echo "##########################"
+# Flash boot/recovery images
+flash_images "$image_dir" "$SLOT" "boot vendor_boot dtbo recovery"
+
+# Reboot to fastbootd
 $fastboot reboot fastboot
+check_success $? "Rebooting to fastbootd failed!"
 
-echo "#####################"
-echo "# FLASHING FIRMWARE #"
-echo "#####################"
-for i in abl aop aop_config bluetooth cpucp devcfg dsp featenabler hyp imagefv keymaster modem multiimgoem multiimgqti qupfw qweslicstore shrm tz uefi uefisecapp xbl xbl_config xbl_ramdump; do
-    $fastboot flash $SLOT $i $i.img
-done
+# Flash firmware
+flash_images "$image_dir" "$SLOT" "abl aop aop_config bluetooth cpucp devcfg dsp featenabler hyp imagefv keymaster modem multiimgoem multiimgqti qupfw qweslicstore shrm tz uefi uefisecapp xbl xbl_config xbl_ramdump"
 
-echo "###################"
-echo "# FLASHING VBMETA #"
-echo "###################"
-read -p "Disable android verified boot?, If unsure, say N. Bootloader won't be lockable if you select Y. (Y/N) " VBMETA_RESP
-case $VBMETA_RESP in
-    [yY] )
-        $fastboot flash $SLOT vbmeta --disable-verity --disable-verification vbmeta.img
-        ;;
-    *)
-        $fastboot flash $SLOT vbmeta vbmeta.img
-        ;;
-esac
+# Flash vbmeta
+if confirm_action "Flash VBMETA" "Disable android verified boot?"; then
+    $fastboot flash $SLOT vbmeta --disable-verity --disable-verification vbmeta.img
+else
+    $fastboot flash $SLOT vbmeta vbmeta.img
+fi
+check_success $? "Flashing vbmeta failed!"
 
-echo "Flash logical partition images?"
-echo "If you're about to install a custom ROM that distributes its own logical partitions, say N."
-read -p "If unsure, say Y. (Y/N) " LOGICAL_RESP
-case $LOGICAL_RESP in
-    [yY] )
-        echo "###############################"
-        echo "# FLASHING LOGICAL PARTITIONS #"
-        echo "###############################"
-        for i in system system_ext product vendor vendor_dlkm odm; do
-            for s in a b; do
-                $fastboot delete-logical-partition ${i}_${s}-cow
-                $fastboot delete-logical-partition ${i}_${s}
-                $fastboot create-logical-partition ${i}_${s} 1
-            done
-
-            $fastboot flash $i $i.img
+# Flash logical partitions
+if confirm_action "Flash Logical" "Flash logical partition images?"; then
+    for i in system system_ext product vendor vendor_dlkm odm; do
+        for s in a b; do
+            $fastboot delete-logical-partition ${i}_${s}-cow
+            check_success $? "Deleting ${i}_${s}-cow failed!"
+            $fastboot delete-logical-partition ${i}_${s}
+            check_success $? "Deleting ${i}_${s} failed!"
+            $fastboot create-logical-partition ${i}_${s} 1
+            check_success $? "Creating ${i}_${s} failed!"
         done
-        ;;
-esac
+        $fastboot flash $i $i.img
+        check_success $? "Flashing $i failed!"
+    done
+fi
 
-echo "#################################"
-echo "# FLASHING VBMETA SYSTEM/VENDOR #"
-echo "#################################"
-for i in vbmeta_system vbmeta_vendor; do
-    case $VBMETA_RESP in
-        [yY] )
-            $fastboot flash $i --disable-verity --disable-verification $i.img
-            ;;
-        *)
-            $fastboot flash $i $i.img
-            ;;
-    esac
-done
+# Flash vbmeta system/vendor
+flash_images "$image_dir" "$SLOT" "vbmeta_system vbmeta_vendor"
 
-echo "#############"
-echo "# REBOOTING #"
-echo "#############"
-read -p "Reboot to system? If unsure, say Y. (Y/N) " REBOOT_RESP
-case $REBOOT_RESP in
-    [yY] )
-        $fastboot reboot
-        ;;
-esac
+# Reboot
+if confirm_action "Reboot" "Reboot to system?"; then
+    $fastboot reboot
+    check_success $? "Rebooting failed!"
+fi
 
-echo "########"
-echo "# DONE #"
-echo "########"
-echo "Stock firmware restored."
-echo "You may now optionally re-lock the bootloader if you haven't disabled android verified boot."
+# Final message
+show_message "Done" "Stock firmware restored. You may now optionally re-lock the bootloader if you haven't disabled android verified boot."
