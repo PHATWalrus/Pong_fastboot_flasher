@@ -90,12 +90,17 @@ if not exist super.img (
     echo ###############################
     echo # FLASHING LOGICAL PARTITIONS #
     echo ###############################
-    for %%i in (system system_ext product vendor vendor_dlkm odm) do (
-        for %%s in (a b) do (
-            call :DeleteLogicalPartition %%i_%%s-cow
-            call :DeleteLogicalPartition %%i_%%s
-            call :CreateLogicalPartition %%i_%%s, 1
+    if exist super_empty.img (
+        %fastboot% wipe-super super_empty.img
+        if %errorlevel% neq 0 (
+            echo Wiping super partition failed. Deleting and creating logical partitions now to make space in super partition
+            pause
+            call :ResizeLogicalPartition
         )
+    ) else (
+        call :ResizeLogicalPartition
+    )
+    for %%i in (system system_ext product vendor vendor_dlkm odm) do (
         call :FlashImage %%i, %%i.img
     )
 ) else (
@@ -132,6 +137,16 @@ echo You may now optionally re-lock the bootloader if you haven't disabled andro
 
 pause
 exit
+
+:ResizeLogicalPartition
+for %%i in (system system_ext product vendor vendor_dlkm odm) do (
+    for %%s in (a b) do (
+        call :DeleteLogicalPartition %%i_%%s-cow
+        call :DeleteLogicalPartition %%i_%%s
+        call :CreateLogicalPartition %%i_%%s, 1
+    )
+)
+exit /b
 
 :DeleteLogicalPartition
 %fastboot% delete-logical-partition %~1
