@@ -49,7 +49,7 @@ function SetActiveSlot {
 }
 
 function handle_fastboot_error {
-    if [ ! "fastboot_ERROR" = "n" ] || [ ! "fastboot_ERROR" = "N" ] || [ ! "fastboot_ERROR" = "" ]; then
+    if [ ! "$FASTBOOT_ERROR" = "n" ] && [ ! "$FASTBOOT_ERROR" = "N" ] && [ ! "$FASTBOOT_ERROR" = "" ]; then
        exit 1
     fi  
 }
@@ -78,6 +78,7 @@ function DeleteLogicalPartition {
 function CreateLogicalPartition {
     if ! fastboot create-logical-partition "$1" "$2"; then
         read -rp "Creating $1 partition failed, Continue? If unsure say N, Pressing Enter key without any input will continue the script. (Y/N)" FASTBOOT_ERROR
+        handle_fastboot_error
         handle_fastboot_error
     fi
 }
@@ -142,12 +143,12 @@ esac
 if [ $SLOT = "all" ]; then
     for i in $boot_partitions; do
         for s in a b; do
-            FlashImage "${i}_${s}" \ "$i.img"
+            FlashImage "${i}_${s}" "$i.img"
         done
     done
 else
     for i in $boot_partitions; do
-        FlashImage "${i}_${SLOT}" \ "$i.img"
+        FlashImage "${i}_${SLOT}" "$i.img"
     done
 fi
 
@@ -169,10 +170,10 @@ fi
 # 'preloader_raw.img' must be flashed at a different partition name
 if [ $SLOT = "--slot=all" ]; then
     for s in a b; do
-        FlashImage "preloader_${s}" \ "preloader_raw.img"
+        FlashImage "preloader_${s}" "preloader_raw.img"
     done
 else
-    FlashImage "preloader_${SLOT}" \ "preloader_raw.img"
+    FlashImage "preloader_${SLOT}" "preloader_raw.img"
 fi
 
 echo "###################"
@@ -184,12 +185,12 @@ case $VBMETA_RESP in
         if [ $SLOT = "all" ]; then
             for i in $vbmeta_partitions; do
                     for s in a b; do
-                        FlashImage "${i}_${s} --disable-verity --disable-verification" \ "$i.img"
+                        FlashImage "${i}_${s} --disable-verity --disable-verification" "$i.img"
                     done
                 done
         else
             for i in $vbmeta_partitions; do
-                FlashImage "${i}_${SLOT} --disable-verity --disable-verification" \ "$i.img"
+                FlashImage "${i}_${SLOT} --disable-verity --disable-verification" "$i.img"
             done
         fi
         ;;
@@ -232,10 +233,10 @@ case $LOGICAL_RESP in
                 ResizeLogicalPartition
             fi
             for s in a b; do
-                FlashImage "${i}_${curSlot}" \ "$i.img"
+                FlashImage "${i}_${curSlot}" "$i.img"
             done
         else
-            FlashImage "super" \ "super.img"
+            FlashImage "super" "super.img"
         fi
         ;;
 esac
