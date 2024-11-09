@@ -89,7 +89,7 @@ function ResizeLogicalPartition {
             DeleteLogicalPartition "${i}_${s}-cow"
             DeleteLogicalPartition "${i}_${s}"
         done
-    CreateLogicalPartition "${i}_${curSlot}" \ "1"
+    CreateLogicalPartition "${i}_${curSlot}"  "1"
     done
 }
 
@@ -158,12 +158,12 @@ echo "#####################"
 if [ $SLOT = "all" ]; then
     for i in $firmware_partitions; do
         for s in a b; do
-            FlashImage "${i}_${s}" \ "$i.img"
+            FlashImage "${i}_${s}"  "$i.img"
         done
     done
 else
     for i in $firmware_partitions; do
-        FlashImage "${i}_${SLOT}" \ "$i.img"
+        FlashImage "${i}_${SLOT}"  "$i.img"
     done
 fi
 
@@ -199,12 +199,12 @@ case $VBMETA_RESP in
         if [ $SLOT = "all" ]; then
             for i in $vbmeta_partitions; do
                 for s in a b; do
-                    FlashImage "${i}_${s}" \ "$i.img"
+                    FlashImage "${i}_${s}"  "$i.img"
                 done
             done
         else
             for i in $vbmeta_partitions; do
-                FlashImage "${i}_${SLOT}" \ "$i.img"
+                FlashImage "${i}_${SLOT}"  "$i.img"
             done
         fi
         ;;
